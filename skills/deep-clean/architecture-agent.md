@@ -33,11 +33,10 @@ Read broadly across the codebase. Don't spot-check — build a mental model of t
 - Abstractions that don't pay for themselves (wrappers that just pass through)
 - Premature generalization (generic solutions for single use cases)
 
-### Data Flow
+### Data Flow (structural only — the Data Flow agent covers correctness, duplication, and efficiency)
 - Unclear data flow between components
 - Props drilling through many layers vs. appropriate use of context/hooks
-- Data transformations that happen in unexpected places
-- Redundant data transformations (same data reshaped multiple times)
+- Data transformations that happen at the wrong architectural layer (e.g., reshaping in a component that should happen in a hook or API route)
 
 ## Output Format
 
