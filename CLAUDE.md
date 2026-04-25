@@ -2,6 +2,10 @@
 
 Global preferences for Claude Code sessions.
 
+## Dictation
+
+The user uses dictation software. Expect occasional typos, homophones, and mis-transcriptions. Use context to infer what was meant. Ask for clarification only when genuinely ambiguous.
+
 ## Learning and Memory Management
 
 ### Journal Tool
@@ -106,7 +110,14 @@ Subagent-driven development works well when agents execute sequentially in the m
 
 ### Bash and git commands
 
-Never combine `cd` and `git` in a single compound command (e.g., `cd some/dir && git status`). This triggers a Claude Code security check that requires user approval. Instead, run `cd` and `git` as separate Bash calls.
+Never combine `cd` and `git` in a single compound command (e.g., `cd some/dir && git status`). This triggers a Claude Code security check that requires user approval every time, regardless of the command.
+
+**Agents must use `git -C <path>` instead of `cd <path> && git ...`.** This is critical — agents cannot prompt for approval, and the compound command pattern is the single biggest source of friction. Examples:
+- `git -C /path/to/repo status` instead of `cd /path/to/repo && git status`
+- `git -C /path/to/repo add .` instead of `cd /path/to/repo && git add .`
+- `git -C /path/to/repo commit -m "msg"` instead of `cd /path/to/repo && git commit -m "msg"`
+
+In the main session (not agents), running `cd` and `git` as separate sequential Bash calls is also acceptable.
 
 ### Commit messages
 
