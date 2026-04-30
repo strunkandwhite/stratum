@@ -110,14 +110,14 @@ Subagent-driven development works well when agents execute sequentially in the m
 
 ### Bash and git commands
 
-Never combine `cd` and `git` in a single compound command (e.g., `cd some/dir && git status`). This triggers a Claude Code security check that requires user approval every time, regardless of the command.
+**Always use `git -C <path>` for every git command. Never combine `cd` and `git`** (e.g., `cd some/dir && git status`). Compound `cd && git` triggers a Claude Code security check that requires manual user approval every time.
 
-**Agents must use `git -C <path>` instead of `cd <path> && git ...`.** This is critical — agents cannot prompt for approval, and the compound command pattern is the single biggest source of friction. Examples:
-- `git -C /path/to/repo status` instead of `cd /path/to/repo && git status`
-- `git -C /path/to/repo add .` instead of `cd /path/to/repo && git add .`
-- `git -C /path/to/repo commit -m "msg"` instead of `cd /path/to/repo && git commit -m "msg"`
+This rule is unconditional and applies to every Claude that runs Bash — the main interactive session (you, reading this) and any subagent or skill. Don't rely on a persisted working directory from a prior `cd` either; just always pass `-C`.
 
-In the main session (not agents), running `cd` and `git` as separate sequential Bash calls is also acceptable.
+Examples:
+- `git -C /path/to/repo status`
+- `git -C /path/to/repo add .`
+- `git -C /path/to/repo commit -m "msg" && git -C /path/to/repo push`
 
 ### Commit messages
 
