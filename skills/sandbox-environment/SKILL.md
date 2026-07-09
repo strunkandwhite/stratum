@@ -59,3 +59,28 @@ The filesystem, not the network, is the real isolation boundary: only the workin
 ## Docker network access
 
 A Docker daemon is available. Published ports on `localhost` are reachable directly (it's in the shell's "no proxy" config) — useful for hitting a locally-run dev server or a published container port.
+
+## git clone can corrupt through the proxy
+
+`git clone` over HTTPS (smart-HTTP pack protocol) can reliably fail with pack corruption errors (`inflate: data stream error`, `pack checksum mismatch`, `bad object`) on repos with any meaningful size — reproduced consistently on a ~50MB repo, with corruption still occurring even after limiting blobs to `--filter=blob:limit=100k`. `--depth 1`, forcing `http.version=HTTP/1.1`, and raising `http.postBuffer` did not help. This looks like the sandbox's proxy mishandling large binary pack streams specifically — not a general network reliability problem.
+
+A plain tarball fetch through the same proxy works fine, since it's a simple GET rather than git's pack negotiation:
+
+```bash
+BRANCH=$(gh api repos/<owner>/<repo> --jq '.default_branch')
+curl -sSL -H "Authorization: token $(gh auth token)" \
+  -o repo.tar.gz "https://codeload.github.com/<owner>/<repo>/tar.gz/refs/heads/$BRANCH"
+mkdir repo && tar -xzf repo.tar.gz -C repo --strip-components=1
+```
+
+Use this when you just need a working tree (e.g. to run a dev server) and don't need git history. If you need actual git history/operations, retry `git clone` — the corruption is reproducible but not deterministic, so it may succeed on a retry for smaller repos.
+
+## Testing a local dev server
+
+`curl` works fine against `localhost`/`127.0.0.1` from Bash. The `WebFetch` tool does not — it rejects a literal `localhost` URL outright ("Invalid URL"), and even given a raw loopback IP like `127.0.0.1`, it force-upgrades `http://` to `https://` per its own documented behavior, which fails the TLS handshake against a plain-HTTP dev server. Use `curl` (or the Chrome DevTools MCP server, if set up — see the `vercel-preview-verification` skill) to check a local server instead of WebFetch.
+
+## Backgrounding a dev server
+
+A backgrounded process started without `disown` can die when its parent shell context ends between Bash tool calls — it'll look like it started fine but `curl` against it moments later gives connection refused. Use `disown` after backgrounding, and confirm reachability with `curl` before relying on it being up.
+
+If you kill and restart a dev server in a hurry, make sure the old process is actually dead (check for zombies with `ps aux`, not just `pkill` and move on) before starting a new one — two processes racing to write the same local build cache can corrupt it. Hit this with Next.js/Turbopack specifically: a killed-and-immediately-restarted `next dev` threw `Failed to restore task data (corrupted database or bug)` / `Invalid block type` from its persistent cache. Fix is `rm -rf .next` and a single clean restart, not a retry loop.

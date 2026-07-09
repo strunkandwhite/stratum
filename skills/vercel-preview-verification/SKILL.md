@@ -38,15 +38,15 @@ After pushing changes to any Vercel-hosted project, use this loop to verify the 
    curl -s "<preview-url>?x-vercel-protection-bypass=$VERCEL_PROTECTION_BYPASS" | grep "expected text"
    ```
 
-5. **Visual verification** — Two options, in order of preference:
+5. **Visual verification** — Two options:
 
-   **Option A: Chrome DevTools MCP** (preferred — interactive, supports clicking/inspecting):
+   **Option A: Chrome DevTools MCP** (interactive, supports clicking/inspecting — but see the setup section below before trying this first; it has not been gotten working in a fresh sandbox as of the last attempt):
    ```
    mcp__chrome-devtools__navigate_page  url=<preview-url>?x-vercel-protection-bypass=$VERCEL_PROTECTION_BYPASS
    mcp__chrome-devtools__take_screenshot  fullPage=true
    ```
 
-   **Option B: Playwright CLI** (fallback — screenshot only):
+   **Option B: Playwright CLI** (screenshot only, but reliably works — start here unless Chrome DevTools MCP is already confirmed working this session):
    ```bash
    npx playwright screenshot --browser chromium --ignore-https-errors --full-page \
      --proxy-server "http://host.docker.internal:3128" \
@@ -55,9 +55,9 @@ After pushing changes to any Vercel-hosted project, use this loop to verify the 
    ```
    Then read the screenshot with the Read tool to visually inspect.
 
-## Chrome DevTools MCP setup
+## Chrome DevTools MCP setup — unresolved as of last attempt
 
-The Chrome DevTools MCP server (`chrome-devtools-mcp`) requires setup in the sandbox:
+**This has not been gotten working end-to-end via the `chrome-devtools-mcp` plugin in a fresh sandbox.** Every attempt failed with `Protocol error (Target.setDiscoverTargets): Target closed` when calling `new_page`, even after the steps below. Treat what follows as partial progress and known dead ends, not a working procedure — check for a newer plugin version or a different config before re-attempting.
 
 1. **Chromium binary**: Install via Playwright (`npx playwright install chromium`), then create a wrapper at `/opt/google/chrome/chrome` that adds `--no-sandbox`:
    ```bash
@@ -70,14 +70,17 @@ The Chrome DevTools MCP server (`chrome-devtools-mcp`) requires setup in the san
    sudo ln -sf /opt/google/chrome/chrome-wrapper.sh /opt/google/chrome/chrome
    ```
 
-2. **Virtual display**: The MCP server launches Chrome in headful mode, which needs an X server:
+2. **Virtual display**: Chrome needs an X server since the MCP server launches it in headful mode (`--headless` defaults to false and the plugin's launch command passes no extra args):
    ```bash
    Xvfb :99 -screen 0 1920x1080x24 &>/dev/null &
-   echo 'export DISPLAY=:99' >> /etc/sandbox-persistent.sh
    ```
-   `xvfb-run` is pre-installed in the sandbox.
+   `xvfb-run` is pre-installed in the sandbox. The Xvfb process does not survive a sandbox restart and must be started fresh each session — there's no way to persist a running process, only env vars.
 
-Both steps are persisted — the wrapper script survives across calls, and `DISPLAY=:99` is in `/etc/sandbox-persistent.sh`. However, the Xvfb process must be restarted if the sandbox restarts.
+3. **`DISPLAY` in `/etc/sandbox-persistent.sh` does NOT reach the MCP server.** This was the actual blocker, and it's a dead end, not a missing step: `CLAUDE_ENV_FILE` is documented as sourced before Bash tool commands specifically — it is not inherited by however the harness spawns MCP server subprocesses. Confirmed directly: with Xvfb running and `DISPLAY=:99` visible in every Bash command, reading `/proc/<chrome-devtools-mcp-pid>/environ` still showed no `DISPLAY` at all, and `new_page` still failed identically. Manually launching Chrome from a Bash command under the same Xvfb succeeded fine (real CDP handshake, real `webSocketDebuggerUrl`) — so Xvfb itself was never the problem, only getting `DISPLAY` into the MCP server's own process.
+
+4. **Killing the MCP server process to force a fresh launch does not trigger a respawn** — it fully drops the tool connection instead. Reconnecting requires the user to reload the plugin from outside the session (e.g. `/reload-plugins`); there's no way to do this from Bash.
+
+**Most promising untested lead:** the MCP server supports `--headless`, which would remove the `DISPLAY` dependency entirely. The plugin's launch command (`.claude-plugin/plugin.json` under the plugin's cache dir) currently passes no args beyond the package name — passing `--headless` (and possibly `--chrome-arg='--no-sandbox'`) there, if that config is editable and survives a plugin reload, is worth trying before spending more time on Xvfb/DISPLAY plumbing.
 
 ## Important notes
 
