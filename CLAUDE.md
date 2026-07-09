@@ -2,6 +2,10 @@
 
 Global preferences for Claude Code sessions.
 
+## Sandbox environments
+
+If running inside a Docker sandbox (check for `/.dockerenv`), see the `sandbox-environment` skill for `CLAUDE_ENV_FILE` persistence, a shell-completions landmine that breaks Bash entirely, and network/Docker access notes. None of it applies on the host machine.
+
 ## Dictation
 
 The user uses dictation software. Expect occasional typos, homophones, and mis-transcriptions. Use context to infer what was meant. Ask for clarification only when genuinely ambiguous.
