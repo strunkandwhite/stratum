@@ -266,42 +266,6 @@ if [ -d "$STRATUM_REPO/skills" ]; then
   done
 fi
 
-# Sync plugins (always copy — vendored snapshots, not live-edited)
-if [ -d "$STRATUM_REPO/plugins/cache" ]; then
-  for marketplace_dir in "$STRATUM_REPO/plugins/cache"/*/; do
-    [ -d "$marketplace_dir" ] || continue
-    marketplace="$(basename "$marketplace_dir")"
-    for plugin_dir in "$marketplace_dir"/*/; do
-      [ -d "$plugin_dir" ] || continue
-      plugin="$(basename "$plugin_dir")"
-      for version_dir in "$plugin_dir"/*/; do
-        [ -d "$version_dir" ] || continue
-        version="$(basename "$version_dir")"
-        target="$CLAUDE_HOME/plugins/cache/$marketplace/$plugin/$version"
-        mkdir -p "$(dirname "$target")"
-        rm -rf "$target"
-        cp -r "${version_dir%/}" "$target"
-        echo -e "  ${GREEN}✓${NC} plugins/$plugin/$version copied"
-      done
-    done
-  done
-fi
-
-# Generate installed_plugins.json from template
-if [ -f "$STRATUM_REPO/plugins/installed_plugins.template.json" ]; then
-  mkdir -p "$CLAUDE_HOME/plugins"
-  sed "s|__CLAUDE_HOME__|$CLAUDE_HOME|g" "$STRATUM_REPO/plugins/installed_plugins.template.json" \
-    > "$CLAUDE_HOME/plugins/installed_plugins.json"
-  echo -e "  ${GREEN}✓${NC} installed_plugins.json generated"
-fi
-
-# Copy static plugin config
-if [ -f "$STRATUM_REPO/plugins/config.json" ]; then
-  mkdir -p "$CLAUDE_HOME/plugins"
-  cp "$STRATUM_REPO/plugins/config.json" "$CLAUDE_HOME/plugins/config.json"
-  echo -e "  ${GREEN}✓${NC} plugins/config.json copied"
-fi
-
 # --- Phase 4: Patch settings.json for current environment ---
 
 echo -e "${BLUE}Phase 4: Patching settings for environment...${NC}"
@@ -325,5 +289,5 @@ fi
 echo ""
 echo -e "${BLUE}=== Sync Complete ===${NC}"
 echo -e "  Global permissions: $(jq '.permissions.allow | length' "$CLAUDE_HOME/settings.json")"
-echo -e "  Synced: settings.json, CLAUDE.md, statusline-command.sh, commands/, skills/, plugins/"
+echo -e "  Synced: settings.json, CLAUDE.md, statusline-command.sh, commands/, skills/"
 echo -e "${BLUE}Done.${NC}"
