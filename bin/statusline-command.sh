@@ -13,27 +13,35 @@ commit=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 
 parts=""
 
+append_part() {
+  if [ -n "$parts" ]; then
+    parts="$parts | $1"
+  else
+    parts="$1"
+  fi
+}
+
 if [ -f "/.dockerenv" ]; then
-  parts="[sandbox]"
+  append_part "[sandbox]"
 fi
 
-parts="$parts  $cwd"
+append_part "$cwd"
 
 if [ -n "$branch" ]; then
-  parts="$parts  $branch"
+  append_part "$branch"
 fi
 
 if [ -n "$commit" ]; then
-  parts="$parts  $commit"
+  append_part "$commit"
 fi
 
 if [ -n "$used" ]; then
   used_int=$(printf "%.0f" "$used")
-  parts="$parts  ctx: ${used_int}%"
+  append_part "ctx: ${used_int}%"
 fi
 
 if [ -n "$model" ]; then
-  parts="$parts  $model"
+  append_part "$model"
 fi
 
 usage=""
@@ -51,7 +59,7 @@ if [ -n "$seven_day" ]; then
   usage="$usage 7d:$(printf '%.0f' "$seven_day")%"
 fi
 if [ -n "$usage" ]; then
-  parts="$parts  $usage"
+  append_part "$usage"
 fi
 
 printf "%s" "$parts"
