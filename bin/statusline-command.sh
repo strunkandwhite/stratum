@@ -44,11 +44,7 @@ if [ -n "$branch" ]; then
 fi
 
 if [ -n "$commit" ]; then
-  append_part "$commit"
-fi
-
-if [ -n "$ahead_behind" ]; then
-  append_part "$ahead_behind"
+  append_part "${commit}${ahead_behind}"
 fi
 
 if [ -n "$used" ]; then
