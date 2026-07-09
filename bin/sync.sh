@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEV_REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CODE_DIR="$(dirname "$DEV_REPO")"
+STRATUM_REPO="$(cd "$(dirname "$0")/.." && pwd)"
+CODE_DIR="$(dirname "$STRATUM_REPO")"
 CLAUDE_HOME="$HOME/.claude"
 TMPDIR_SYNC="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_SYNC"' EXIT
@@ -16,6 +16,11 @@ NC='\033[0m'
 # Counters for summary
 promoted_count=0
 symlinks_created_count=0
+
+# --- Phase 0: Pull latest from origin ---
+
+echo -e "${BLUE}Phase 0: Pulling latest stratum changes...${NC}"
+git -C "$STRATUM_REPO" pull
 
 # --- jq filter: categorize a permission ---
 # Returns "promote" or "local" based on the rules
@@ -59,7 +64,7 @@ echo '[]' > "$TMPDIR_SYNC/all_perms.json"
 for settings_file in "$CODE_DIR"/*/.claude/settings.local.json; do
   [ -f "$settings_file" ] || continue
   project="$(basename "$(dirname "$(dirname "$settings_file")")")"
-  [ "$project" = "dev" ] && continue
+  [ "$project" = "stratum" ] && continue
 
   # Extract permissions, tag each with project and category
   jq --arg project "$project" --argjson categorize "null" \
@@ -101,19 +106,19 @@ jq --arg filter "$CATEGORIZE_FILTER" '
 jq '[.[] | select(.action == "promote") | .perm]' "$TMPDIR_SYNC/categorized.json" > "$TMPDIR_SYNC/to_promote.json"
 
 # Load or create the global settings.json
-if [ ! -f "$DEV_REPO/settings.json" ]; then
+if [ ! -f "$STRATUM_REPO/settings.json" ]; then
   if [ -f "$CLAUDE_HOME/settings.json" ]; then
-    cp "$CLAUDE_HOME/settings.json" "$DEV_REPO/settings.json"
+    cp "$CLAUDE_HOME/settings.json" "$STRATUM_REPO/settings.json"
   else
-    echo '{"permissions":{"allow":[],"deny":[],"ask":[]}}' | jq . > "$DEV_REPO/settings.json"
+    echo '{"permissions":{"allow":[],"deny":[],"ask":[]}}' | jq . > "$STRATUM_REPO/settings.json"
   fi
 fi
 
 # Merge promoted perms into global settings (deduplicate and sort)
 jq --argjson new_perms "$(cat "$TMPDIR_SYNC/to_promote.json")" \
   '.permissions.allow = (.permissions.allow + $new_perms | unique | sort)' \
-  "$DEV_REPO/settings.json" > "$DEV_REPO/settings.json.tmp"
-mv "$DEV_REPO/settings.json.tmp" "$DEV_REPO/settings.json"
+  "$STRATUM_REPO/settings.json" > "$STRATUM_REPO/settings.json.tmp"
+mv "$STRATUM_REPO/settings.json.tmp" "$STRATUM_REPO/settings.json"
 
 promoted_count=$(jq 'length' "$TMPDIR_SYNC/to_promote.json")
 echo -e "${GREEN}  Promoted $promoted_count new permission(s) to global${NC}"
@@ -129,12 +134,12 @@ fi
 echo -e "${BLUE}Phase 2: Trimming promoted entries from project settings...${NC}"
 
 # Get the full global allow list
-jq '.permissions.allow' "$DEV_REPO/settings.json" > "$TMPDIR_SYNC/global_allow.json"
+jq '.permissions.allow' "$STRATUM_REPO/settings.json" > "$TMPDIR_SYNC/global_allow.json"
 
 for settings_file in "$CODE_DIR"/*/.claude/settings.local.json; do
   [ -f "$settings_file" ] || continue
   project="$(basename "$(dirname "$(dirname "$settings_file")")")"
-  [ "$project" = "dev" ] && continue
+  [ "$project" = "stratum" ] && continue
 
   # Filter out entries that exist in global
   remaining=$(jq --argjson global "$(cat "$TMPDIR_SYNC/global_allow.json")" \
@@ -233,18 +238,18 @@ link_or_copy_dir() {
   echo -e "  ${GREEN}✓${NC} $label → $source"
 }
 
-if [ "$IS_SANDBOX" = true ] && [ -f "$DEV_REPO/settings.sandbox.json" ]; then
-  link_or_copy "$DEV_REPO/settings.sandbox.json" "$CLAUDE_HOME/settings.json" "settings.json (sandbox)"
+if [ "$IS_SANDBOX" = true ] && [ -f "$STRATUM_REPO/settings.sandbox.json" ]; then
+  link_or_copy "$STRATUM_REPO/settings.sandbox.json" "$CLAUDE_HOME/settings.json" "settings.json (sandbox)"
 else
-  link_or_copy "$DEV_REPO/settings.json" "$CLAUDE_HOME/settings.json" "settings.json"
+  link_or_copy "$STRATUM_REPO/settings.json" "$CLAUDE_HOME/settings.json" "settings.json"
 fi
-link_or_copy "$DEV_REPO/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md" "CLAUDE.md"
-link_or_copy "$DEV_REPO/bin/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh" "statusline-command.sh"
+link_or_copy "$STRATUM_REPO/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md" "CLAUDE.md"
+link_or_copy "$STRATUM_REPO/bin/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh" "statusline-command.sh"
 
 # Symlink commands
-if [ -d "$DEV_REPO/commands" ]; then
+if [ -d "$STRATUM_REPO/commands" ]; then
   mkdir -p "$CLAUDE_HOME/commands"
-  for cmd_file in "$DEV_REPO/commands"/*.md; do
+  for cmd_file in "$STRATUM_REPO/commands"/*.md; do
     [ -f "$cmd_file" ] || continue
     cmd_name="$(basename "$cmd_file")"
     link_or_copy "$cmd_file" "$CLAUDE_HOME/commands/$cmd_name" "commands/$cmd_name"
@@ -252,9 +257,9 @@ if [ -d "$DEV_REPO/commands" ]; then
 fi
 
 # Sync skills (symlink on host, copy in sandbox)
-if [ -d "$DEV_REPO/skills" ]; then
+if [ -d "$STRATUM_REPO/skills" ]; then
   mkdir -p "$CLAUDE_HOME/skills"
-  for skill_dir in "$DEV_REPO/skills"/*/; do
+  for skill_dir in "$STRATUM_REPO/skills"/*/; do
     [ -d "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
     link_or_copy_dir "$skill_dir" "$CLAUDE_HOME/skills/$skill_name" "skills/$skill_name"
@@ -262,8 +267,8 @@ if [ -d "$DEV_REPO/skills" ]; then
 fi
 
 # Sync plugins (always copy — vendored snapshots, not live-edited)
-if [ -d "$DEV_REPO/plugins/cache" ]; then
-  for marketplace_dir in "$DEV_REPO/plugins/cache"/*/; do
+if [ -d "$STRATUM_REPO/plugins/cache" ]; then
+  for marketplace_dir in "$STRATUM_REPO/plugins/cache"/*/; do
     [ -d "$marketplace_dir" ] || continue
     marketplace="$(basename "$marketplace_dir")"
     for plugin_dir in "$marketplace_dir"/*/; do
@@ -283,17 +288,17 @@ if [ -d "$DEV_REPO/plugins/cache" ]; then
 fi
 
 # Generate installed_plugins.json from template
-if [ -f "$DEV_REPO/plugins/installed_plugins.template.json" ]; then
+if [ -f "$STRATUM_REPO/plugins/installed_plugins.template.json" ]; then
   mkdir -p "$CLAUDE_HOME/plugins"
-  sed "s|__CLAUDE_HOME__|$CLAUDE_HOME|g" "$DEV_REPO/plugins/installed_plugins.template.json" \
+  sed "s|__CLAUDE_HOME__|$CLAUDE_HOME|g" "$STRATUM_REPO/plugins/installed_plugins.template.json" \
     > "$CLAUDE_HOME/plugins/installed_plugins.json"
   echo -e "  ${GREEN}✓${NC} installed_plugins.json generated"
 fi
 
 # Copy static plugin config
-if [ -f "$DEV_REPO/plugins/config.json" ]; then
+if [ -f "$STRATUM_REPO/plugins/config.json" ]; then
   mkdir -p "$CLAUDE_HOME/plugins"
-  cp "$DEV_REPO/plugins/config.json" "$CLAUDE_HOME/plugins/config.json"
+  cp "$STRATUM_REPO/plugins/config.json" "$CLAUDE_HOME/plugins/config.json"
   echo -e "  ${GREEN}✓${NC} plugins/config.json copied"
 fi
 
