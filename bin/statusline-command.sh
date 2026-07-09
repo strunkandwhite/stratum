@@ -49,10 +49,14 @@ if [ -n "$five_hour" ]; then
   five_hour_int=$(printf '%.0f' "$five_hour")
   usage="5h:${five_hour_int}%"
   if [ "$five_hour_int" -gt 80 ] && [ -n "$five_hour_resets_at" ]; then
-    reset_time=$(date -r "$five_hour_resets_at" '+%H:%M' 2>/dev/null || date -d "@$five_hour_resets_at" '+%H:%M' 2>/dev/null)
-    if [ -n "$reset_time" ]; then
-      usage="$usage (resets $reset_time)"
+    now_epoch=$(date +%s)
+    seconds_until_reset=$(( ${five_hour_resets_at%.*} - now_epoch ))
+    if [ "$seconds_until_reset" -lt 0 ]; then
+      seconds_until_reset=0
     fi
+    hours_until_reset=$(( seconds_until_reset / 3600 ))
+    minutes_until_reset=$(( (seconds_until_reset % 3600) / 60 ))
+    usage="$usage (resets in $(printf '%d:%02d' "$hours_until_reset" "$minutes_until_reset"))"
   fi
 fi
 if [ -n "$seven_day" ]; then
