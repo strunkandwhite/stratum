@@ -11,6 +11,18 @@ seven_day=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // emp
 branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 commit=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 
+ahead_behind=""
+upstream=$(git -C "$cwd" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)
+if [ -n "$upstream" ]; then
+  read -r behind_count ahead_count < <(git -C "$cwd" rev-list --left-right --count '@{u}...HEAD' 2>/dev/null)
+  if [ -n "$ahead_count" ] && [ "$ahead_count" -gt 0 ]; then
+    ahead_behind="${ahead_behind}↑${ahead_count}"
+  fi
+  if [ -n "$behind_count" ] && [ "$behind_count" -gt 0 ]; then
+    ahead_behind="${ahead_behind}↓${behind_count}"
+  fi
+fi
+
 parts=""
 
 append_part() {
@@ -33,6 +45,10 @@ fi
 
 if [ -n "$commit" ]; then
   append_part "$commit"
+fi
+
+if [ -n "$ahead_behind" ]; then
+  append_part "$ahead_behind"
 fi
 
 if [ -n "$used" ]; then
